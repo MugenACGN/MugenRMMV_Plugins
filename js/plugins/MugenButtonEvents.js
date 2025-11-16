@@ -1,5 +1,5 @@
 /*:
- * @plugindesc v1.1.0 自定义按键绑定公共事件
+ * @plugindesc v1.1.1 自定义按键绑定公共事件 - 修复存档间配置隔离
  * @author Mugen技术部 衬雨 Mieriki
  *
  * @param Common Event Config
@@ -10,10 +10,10 @@
  *
  * @help
  * ============================================================================
- * Mugen自定义按键绑定公共事件 v1.1.0
+ * Mugen自定义按键绑定公共事件 v1.1.1
  * ============================================================================
  *
- * 优化插件命令处理，采用映射表方式提高性能。
+ * 修复存档间配置隔离问题，确保每个存档有独立的按键配置。
  *
  * 插件命令：
  *   MugenSetKeyConfig [json]    - 使用JSON设置按键配置
@@ -33,14 +33,12 @@
  * 本插件由Mugen技术部制作，遵循AGPL-3.0许可证。
  * 技术支持：Mugenacgn@163.com
  *
+ * 1.1.1 :
+ *   - 修复新游戏存档间配置隔离问题
  * 1.1.0 :
  *   - 重构按键配置方式, 使用json格式一次性配置所有按键
  *   - 新增动态按键绑定持久化
  *   - 通过优化实现比之前更快的配置读取, 更小的内存占用, 更快的按键检查
- * ============================================================================
- * 1.0.4 - 新增插件指令绑定按键功能(重启游戏时会失效)
- * 1.0.3 - 使用查表优化插件指令读取
- * 1.0.2 - 使用预缓存优化按键检查
  */
 (function () {
     'use strict';
@@ -51,10 +49,11 @@
     class MugenButtonEvents {
         static init() {
             this._imported = true;
-            this._version = '2.2';
+            this._version = '1.1.1';
 
             this._setupKeyMappings();
             this._loadDefaultConfig();
+            this._setupCurrentConfig();
             this._applyConfig();
             this._extendCoreSystems();
             this._setupOptimizations();
@@ -127,11 +126,23 @@
             try {
                 const configJson = parameters['Common Event Config'] || '{}';
                 this._defaultConfig = JSON.parse(configJson);
-                this._currentConfig = JSON.parse(JSON.stringify(this._defaultConfig));
             } catch (e) {
                 console.error('MugenButtonEvents: 默认配置解析错误，使用空配置', e);
                 this._defaultConfig = {};
-                this._currentConfig = {};
+            }
+        }
+
+        static _setupCurrentConfig() {
+            // 简化逻辑：始终使用默认配置作为起点
+            this._currentConfig = JSON.parse(JSON.stringify(this._defaultConfig));
+
+            // 只有在游戏系统已初始化且有保存的配置时才使用存档配置
+            if ($gameSystem && $gameSystem.mugenKeyConfig) {
+                // 检查是否是有效的存档配置（非空对象）
+                const savedConfig = $gameSystem.mugenKeyConfig;
+                if (savedConfig && typeof savedConfig === 'object' && Object.keys(savedConfig).length > 0) {
+                    this._currentConfig = JSON.parse(JSON.stringify(savedConfig));
+                }
             }
         }
 
@@ -164,10 +175,18 @@
             this._triggerCooldown = 100;
         }
 
+        static _updateGameSystemConfig() {
+            // 更新游戏系统中的配置
+            if ($gameSystem) {
+                $gameSystem.mugenKeyConfig = JSON.parse(JSON.stringify(this._currentConfig));
+            }
+        }
+
         static _extendCoreSystems() {
             this._extendSceneSystem();
             this._extendInterpreterSystem();
             this._extendSaveSystem();
+            this._extendTitleSystem();
         }
 
         static _extendSceneSystem() {
@@ -239,6 +258,7 @@
                     const newConfig = JSON.parse(jsonString);
 
                     MugenButtonEvents._currentConfig = newConfig;
+                    MugenButtonEvents._updateGameSystemConfig();
                     MugenButtonEvents._applyConfig();
                     MugenButtonEvents._setupOptimizations();
 
@@ -250,16 +270,14 @@
 
             Game_Interpreter.prototype._mugenResetConfig = function() {
                 MugenButtonEvents._currentConfig = JSON.parse(JSON.stringify(MugenButtonEvents._defaultConfig));
+                MugenButtonEvents._updateGameSystemConfig();
                 MugenButtonEvents._applyConfig();
                 MugenButtonEvents._setupOptimizations();
                 console.log('MugenButtonEvents: 已重置为默认配置');
             };
 
             Game_Interpreter.prototype._mugenSaveConfig = function() {
-                if (!$gameSystem.mugenKeyConfig) {
-                    $gameSystem.mugenKeyConfig = {};
-                }
-                $gameSystem.mugenKeyConfig = JSON.parse(JSON.stringify(MugenButtonEvents._currentConfig));
+                MugenButtonEvents._updateGameSystemConfig();
                 console.log('MugenButtonEvents: 按键配置已保存到存档');
             };
 
@@ -290,6 +308,7 @@
 
                 // 更新配置
                 MugenButtonEvents._currentConfig[keyName] = eventId;
+                MugenButtonEvents._updateGameSystemConfig();
 
                 // 更新按键映射
                 const keyCode = MugenButtonEvents._nameToKeyCode[keyName];
@@ -403,28 +422,63 @@
             const originalGameSystemClear = Game_System.prototype.clear;
             Game_System.prototype.clear = function() {
                 originalGameSystemClear.call(this);
-                this.mugenKeyConfig = null;
+                this.mugenKeyConfig = null; // 新游戏时清除配置
             };
 
             const originalGameSystemOnBeforeSave = Game_System.prototype.onBeforeSave;
             Game_System.prototype.onBeforeSave = function() {
                 originalGameSystemOnBeforeSave && originalGameSystemOnBeforeSave.call(this);
                 // 保存前确保配置是最新的
-                if (this.mugenKeyConfig) {
-                    this.mugenKeyConfig = JSON.parse(JSON.stringify(MugenButtonEvents._currentConfig));
-                }
+                MugenButtonEvents._updateGameSystemConfig();
             };
 
             const originalGameSystemOnAfterLoad = Game_System.prototype.onAfterLoad;
             Game_System.prototype.onAfterLoad = function() {
                 originalGameSystemOnAfterLoad && originalGameSystemOnAfterLoad.call(this);
-                // 加载后应用配置
-                if (this.mugenKeyConfig) {
-                    MugenButtonEvents._currentConfig = JSON.parse(JSON.stringify(this.mugenKeyConfig));
-                    MugenButtonEvents._applyConfig();
-                    MugenButtonEvents._setupOptimizations();
-                }
+                // 加载存档后重新初始化插件配置
+                MugenButtonEvents._setupCurrentConfig();
+                MugenButtonEvents._applyConfig();
+                MugenButtonEvents._setupOptimizations();
             };
+
+            // 扩展场景切换以处理配置刷新
+            const originalSceneBootStart = Scene_Boot.prototype.start;
+            Scene_Boot.prototype.start = function() {
+                originalSceneBootStart.call(this);
+                // 游戏启动时确保配置正确初始化
+                MugenButtonEvents._setupCurrentConfig();
+                MugenButtonEvents._applyConfig();
+                MugenButtonEvents._setupOptimizations();
+            };
+        }
+
+        static _extendTitleSystem() {
+            // 在返回主菜单时清除缓存
+            const originalSceneTitleStart = Scene_Title.prototype.start;
+            Scene_Title.prototype.start = function() {
+                originalSceneTitleStart.call(this);
+                // 返回主菜单时重置插件配置
+                MugenButtonEvents._resetPluginState();
+            };
+
+            // 在结束游戏返回标题时也清除缓存
+            const originalSceneGameEndTerminate = Scene_GameEnd.prototype.terminate;
+            Scene_GameEnd.prototype.terminate = function() {
+                originalSceneGameEndTerminate.call(this);
+                // 结束游戏返回标题时重置插件配置
+                MugenButtonEvents._resetPluginState();
+            };
+        }
+
+        static _resetPluginState() {
+            // 重置插件状态到初始状态
+            this._currentConfig = JSON.parse(JSON.stringify(this._defaultConfig));
+            this._setupOptimizations();
+
+            // 重新应用配置
+            this._applyConfig();
+
+            console.log('MugenButtonEvents: 已重置插件状态（返回主菜单）');
         }
 
         // 公共API
@@ -447,4 +501,4 @@
 
     // 初始化插件
     MugenButtonEvents.init();
-}());
+})();
