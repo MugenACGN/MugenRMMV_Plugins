@@ -1,5 +1,5 @@
 /*:
- * @plugindesc v1.03 在地图场景中按下特定键盘按键时调用公共事件
+ * @plugindesc v1.04 在地图场景中按下特定键盘按键时调用公共事件
  * @author Mugen技术部 衬雨 Mieriki
  *
  * @param ---基础按键---
@@ -545,7 +545,7 @@
  * @desc 按下小键盘/键时调用的公共事件ID。设为0则禁用。
  * @default 0
  *
- * @help
+  * @help
  * ============================================================================
  * Mugen按钮公共事件插件
  * ============================================================================
@@ -557,12 +557,22 @@
  *   MugenRevertButton [动作]  - 恢复按键默认功能
  *   MugenSwitchButton [动作]  - 启用自定义按键绑定
  *   MugenTriggerButton [动作] - 模拟按键按下
- *
+ *   MugenSetKey [按键名] [公共事件ID] - 运行时修改按键配置
  *
  * 可用动作：Ok, Cancel, Dash, PageUp, PageDown, Left, Up, Right, Down, All
+ * 可用按键名：q, w, e, r, t, y, u, i, o, p, a, s, d, f, g, h, j, k, l, z, x, c, v, b, n, m,
+ *           1, 2, 3, 4, 5, 6, 7, 8, 9, 0, space, enter, shift 等
+ *
+ * 示例：
+ *   MugenSetKey q 10     // 设置Q键触发公共事件10
+ *   MugenSetKey space 0  // 禁用空格键功能
  *
  * 本插件由Mugen技术部制作，并遵循AGPL-3.0许可证。
  * 如需授权，请联系Mugen技术部。Mugenacgn@163.com
+ *
+ * 日志:
+ *
+ * 1.04 - 新增插件指令绑定按键功能(重启游戏时会失效)
  */
 (function () {
     'use strict';
@@ -573,19 +583,16 @@
     class MugenButtonEvents {
         static init() {
             this._imported = true;
-            this._version = '1.02';
+            this._version = '1.04';
 
             this._loadConfig();
             this._setupKeyMapping();
-            this._fixInputSystem(); // 修复Input系统
+            this._fixInputSystem();
             this._extendCoreSystems();
-
-            // 性能优化：预计算有效按键
             this._setupOptimizations();
         }
 
         static _fixInputSystem() {
-            // 修复：确保Input对象有必要的兼容性方法
             if (typeof Input._isEscapeCompatible !== 'function') {
                 Input._isEscapeCompatible = function(keyName) {
                     return keyName === 'escape' || keyName === 'cancel';
@@ -596,84 +603,23 @@
         static _loadConfig() {
             const parameters = PluginManager.parameters('MugenButtonEvents');
 
-            // 使用对象字面量一次性创建配置，避免多次属性赋值
-            this._keyConfig = {
-                tilde: Number(parameters['KeyTilde'] || 0),
-                1: Number(parameters['Key1'] || 0),
-                2: Number(parameters['Key2'] || 0),
-                3: Number(parameters['Key3'] || 0),
-                4: Number(parameters['Key4'] || 0),
-                5: Number(parameters['Key5'] || 0),
-                6: Number(parameters['Key6'] || 0),
-                7: Number(parameters['Key7'] || 0),
-                8: Number(parameters['Key8'] || 0),
-                9: Number(parameters['Key9'] || 0),
-                0: Number(parameters['Key0'] || 0),
-                minus: Number(parameters['KeyMinus'] || 0),
-                equal: Number(parameters['KeyEqual'] || 0),
-                q: Number(parameters['KeyQ'] || 0),
-                w: Number(parameters['KeyW'] || 0),
-                e: Number(parameters['KeyE'] || 0),
-                r: Number(parameters['KeyR'] || 0),
-                t: Number(parameters['KeyT'] || 0),
-                y: Number(parameters['KeyY'] || 0),
-                u: Number(parameters['KeyU'] || 0),
-                i: Number(parameters['KeyI'] || 0),
-                o: Number(parameters['KeyO'] || 0),
-                p: Number(parameters['KeyP'] || 0),
-                foreBrack: Number(parameters['KeyBracketOpen'] || 0),
-                backBrack: Number(parameters['KeyBracketClose'] || 0),
-                backSlash: Number(parameters['KeyBackslash'] || 0),
-                a: Number(parameters['KeyA'] || 0),
-                s: Number(parameters['KeyS'] || 0),
-                d: Number(parameters['KeyD'] || 0),
-                f: Number(parameters['KeyF'] || 0),
-                g: Number(parameters['KeyG'] || 0),
-                h: Number(parameters['KeyH'] || 0),
-                j: Number(parameters['KeyJ'] || 0),
-                k: Number(parameters['KeyK'] || 0),
-                l: Number(parameters['KeyL'] || 0),
-                semicolon: Number(parameters['KeySemicolon'] || 0),
-                quote: Number(parameters['KeyQuote'] || 0),
-                enter: Number(parameters['KeyEnter'] || 0),
-                keyShift: Number(parameters['KeyShift'] || 0),
-                z: Number(parameters['KeyZ'] || 0),
-                x: Number(parameters['KeyX'] || 0),
-                c: Number(parameters['KeyC'] || 0),
-                v: Number(parameters['KeyV'] || 0),
-                b: Number(parameters['KeyB'] || 0),
-                n: Number(parameters['KeyN'] || 0),
-                m: Number(parameters['KeyM'] || 0),
-                comma: Number(parameters['KeyComma'] || 0),
-                period: Number(parameters['KeyPeriod'] || 0),
-                foreSlash: Number(parameters['KeySlash'] || 0),
-                space: Number(parameters['KeySpace'] || 0),
-                dirLeft: Number(parameters['KeyLeft'] || 0),
-                dirUp: Number(parameters['KeyUp'] || 0),
-                dirRight: Number(parameters['KeyRight'] || 0),
-                dirDown: Number(parameters['KeyDown'] || 0),
-                ins: Number(parameters['KeyInsert'] || 0),
-                del: Number(parameters['KeyDelete'] || 0),
-                home: Number(parameters['KeyHome'] || 0),
-                end: Number(parameters['KeyEnd'] || 0),
-                pageUp: Number(parameters['KeyPageUp'] || 0),
-                pageDown: Number(parameters['KeyPageDown'] || 0),
-                num0: Number(parameters['KeyNum0'] || 0),
-                num1: Number(parameters['KeyNum1'] || 0),
-                num2: Number(parameters['KeyNum2'] || 0),
-                num3: Number(parameters['KeyNum3'] || 0),
-                num4: Number(parameters['KeyNum4'] || 0),
-                num5: Number(parameters['KeyNum5'] || 0),
-                num6: Number(parameters['KeyNum6'] || 0),
-                num7: Number(parameters['KeyNum7'] || 0),
-                num8: Number(parameters['KeyNum8'] || 0),
-                num9: Number(parameters['KeyNum9'] || 0),
-                numPeriod: Number(parameters['KeyNumPeriod'] || 0),
-                numPlus: Number(parameters['KeyNumPlus'] || 0),
-                numMinus: Number(parameters['KeyNumMinus'] || 0),
-                numTimes: Number(parameters['KeyNumMultiply'] || 0),
-                numDivide: Number(parameters['KeyNumDivide'] || 0)
-            };
+            this._keyConfig = {};
+            const keyNames = [
+                'tilde', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
+                'minus', 'equal', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p',
+                'foreBrack', 'backBrack', 'backSlash', 'a', 's', 'd', 'f', 'g', 'h',
+                'j', 'k', 'l', 'semicolon', 'quote', 'enter', 'keyShift', 'z', 'x',
+                'c', 'v', 'b', 'n', 'm', 'comma', 'period', 'foreSlash', 'space',
+                'dirLeft', 'dirUp', 'dirRight', 'dirDown', 'ins', 'del', 'home',
+                'end', 'pageUp', 'pageDown', 'num0', 'num1', 'num2', 'num3', 'num4',
+                'num5', 'num6', 'num7', 'num8', 'num9', 'numPeriod', 'numPlus',
+                'numMinus', 'numTimes', 'numDivide'
+            ];
+
+            keyNames.forEach(key => {
+                const paramName = 'Key' + key.charAt(0).toUpperCase() + key.slice(1);
+                this._keyConfig[key] = Number(parameters[paramName] || 0);
+            });
         }
 
         static _setupKeyMapping() {
@@ -690,32 +636,25 @@
                 numDivide: 111
             };
 
-            const keys = Object.keys(this._keyConfig);
-            for (let i = 0, len = keys.length; i < len; i++) {
-                const key = keys[i];
+            Object.keys(this._keyConfig).forEach(key => {
                 const eventId = this._keyConfig[key];
                 const keyCode = keyCodeMap[key];
-
                 if (eventId !== 0 && keyCode) {
                     Input.keyMapper[keyCode] = key;
                 }
-            }
+            });
         }
 
         static _setupOptimizations() {
             this._activeKeys = [];
-            const keys = Object.keys(this._keyConfig);
-
-            for (let i = 0, len = keys.length; i < len; i++) {
-                const key = keys[i];
+            Object.keys(this._keyConfig).forEach(key => {
                 if (this._keyConfig[key] > 0) {
                     this._activeKeys.push(key);
                 }
-            }
+            });
 
-            // 修复：不要缓存Input方法，因为它们依赖于this上下文
-            // 只缓存不需要上下文的方法
-            this._gameTempReserveCommonEvent = $gameTemp.reserveCommonEvent.bind($gameTemp);
+            this._lastTriggerTime = 0;
+            this._triggerCooldown = 100;
         }
 
         static _extendCoreSystems() {
@@ -725,7 +664,6 @@
         }
 
         static _extendInputSystem() {
-            // 性能优化：使用查找表而不是条件判断链
             const restoreMappings = {
                 OK: { 13: 'ok', 32: 'ok', 90: 'ok' },
                 CANCEL: { 45: 'escape', 88: 'escape', 96: 'escape' },
@@ -747,16 +685,12 @@
             Input.mugenRestoreDefaultKeys = function(action = 'ALL') {
                 const mapping = restoreMappings[action];
                 if (mapping) {
-                    // 性能优化：直接赋值而不是使用Object.assign
-                    const keyCodes = Object.keys(mapping);
-                    for (let i = 0, len = keyCodes.length; i < len; i++) {
-                        const keyCode = keyCodes[i];
+                    Object.keys(mapping).forEach(keyCode => {
                         this.keyMapper[keyCode] = mapping[keyCode];
-                    }
+                    });
                 }
             };
 
-            // 性能优化：预计算启用映射
             const enableMappings = {
                 OK: [
                     { key: 'enter', code: 13 },
@@ -797,26 +731,21 @@
 
             Input.mugenEnableCustomKeys = function(action = 'ALL') {
                 if (action === 'ALL') {
-                    // 性能优化：一次性设置所有映射
-                    const actions = ['OK', 'CANCEL', 'DASH', 'PAGEUP', 'PAGEDOWN', 'LEFT', 'UP', 'RIGHT', 'DOWN'];
-                    for (let i = 0, len = actions.length; i < len; i++) {
-                        const mappings = enableMappings[actions[i]];
-                        for (let j = 0, jLen = mappings.length; j < jLen; j++) {
-                            const mapping = mappings[j];
+                    Object.keys(enableMappings).forEach(actionKey => {
+                        enableMappings[actionKey].forEach(mapping => {
                             if (MugenButtonEvents._keyConfig[mapping.key] !== 0) {
                                 this.keyMapper[mapping.code] = mapping.key;
                             }
-                        }
-                    }
+                        });
+                    });
                 } else {
                     const mappings = enableMappings[action];
                     if (mappings) {
-                        for (let i = 0, len = mappings.length; i < len; i++) {
-                            const mapping = mappings[i];
+                        mappings.forEach(mapping => {
                             if (MugenButtonEvents._keyConfig[mapping.key] !== 0) {
                                 this.keyMapper[mapping.code] = mapping.key;
                             }
-                        }
+                        });
                     }
                 }
             };
@@ -825,7 +754,7 @@
         static _extendSceneSystem() {
             const originalSceneBaseStart = Scene_Base.prototype.start;
             const originalSceneMapStart = Scene_Map.prototype.start;
-            const originalSceneMapUpdate = Scene_Map.prototype.updateScene;
+            const originalSceneMapUpdate = Scene_Map.prototype.update;
 
             Scene_Base.prototype.start = function() {
                 originalSceneBaseStart.call(this);
@@ -837,24 +766,25 @@
                 Input.mugenEnableCustomKeys('ALL');
             };
 
-            Scene_Map.prototype.updateScene = function() {
+            Scene_Map.prototype.update = function() {
                 originalSceneMapUpdate.call(this);
-
-                if (SceneManager.isSceneChanging() || $gameMap.isEventRunning()) return;
-
                 this._mugenCheckButtonEvents();
             };
 
             Scene_Map.prototype._mugenCheckButtonEvents = function() {
-                // 性能优化：只遍历有效的按键
+                if (SceneManager.isSceneChanging() || $gameMap.isEventRunning()) return;
+
+                const now = Date.now();
+                if (now - this._lastTriggerTime < this._triggerCooldown) return;
+
                 const activeKeys = MugenButtonEvents._activeKeys;
                 const keyConfig = MugenButtonEvents._keyConfig;
 
                 for (let i = 0, len = activeKeys.length; i < len; i++) {
                     const key = activeKeys[i];
-                    // 修复：直接调用Input.isRepeated，不要使用缓存版本
                     if (Input.isRepeated(key)) {
                         $gameTemp.reserveCommonEvent(keyConfig[key]);
+                        this._lastTriggerTime = now;
                         break;
                     }
                 }
@@ -864,11 +794,11 @@
         static _extendInterpreterSystem() {
             const originalPluginCommand = Game_Interpreter.prototype.pluginCommand;
 
-            // 性能优化：使用查找表而不是条件判断链
             const commandMap = {
                 'MugenRevertButton': '_mugenRevertButton',
                 'MugenSwitchButton': '_mugenSwitchButton',
-                'MugenTriggerButton': '_mugenTriggerButton'
+                'MugenTriggerButton': '_mugenTriggerButton',
+                'MugenSetKey': '_mugenSetKey'
             };
 
             Game_Interpreter.prototype.pluginCommand = function(command, args) {
@@ -898,16 +828,109 @@
                 if (!args.length) return;
                 let button = args[0].toLowerCase();
 
-                // 性能优化：使用查找表
-                const buttonMap = { 'cancel': 'escape', 'dash': 'shift' };
-                button = buttonMap[button] || button;
+                const buttonMap = {
+                    'ok': 'ok', 'cancel': 'escape', 'dash': 'shift',
+                    'pageup': 'pageup', 'pagedown': 'pagedown',
+                    'left': 'left', 'up': 'up', 'right': 'right', 'down': 'down'
+                };
 
+                button = buttonMap[button] || button;
                 Input._latestButton = button;
                 Input._pressedTime = 0;
             };
+
+            Game_Interpreter.prototype._mugenSetKey = function(args) {
+                if (args.length < 2) {
+                    console.warn('MugenButtonEvents: MugenSetKey需要2个参数: 按键名 公共事件ID');
+                    return;
+                }
+
+                const keyName = args[0].toLowerCase();
+                const eventId = parseInt(args[1]);
+
+                if (isNaN(eventId)) {
+                    console.warn(`MugenButtonEvents: 无效的公共事件ID: ${args[1]}`);
+                    return;
+                }
+
+                // 按键名映射表，支持更友好的按键名称
+                const keyNameMap = {
+                    'shift': 'keyShift',
+                    'space': 'space',
+                    'enter': 'enter',
+                    'left': 'dirLeft',
+                    'right': 'dirRight',
+                    'up': 'dirUp',
+                    'down': 'dirDown',
+                    'insert': 'ins',
+                    'delete': 'del',
+                    'home': 'home',
+                    'end': 'end',
+                    'pageup': 'pageUp',
+                    'pagedown': 'pageDown'
+                };
+
+                const internalKeyName = keyNameMap[keyName] || keyName;
+
+                if (!MugenButtonEvents._keyConfig.hasOwnProperty(internalKeyName)) {
+                    console.warn(`MugenButtonEvents: 未知的按键名: ${keyName}`);
+                    return;
+                }
+
+                // 更新配置
+                MugenButtonEvents._keyConfig[internalKeyName] = eventId;
+
+                // 重新设置按键映射
+                const keyCodeMap = {
+                    tilde: 192, 1: 49, 2: 50, 3: 51, 4: 52, 5: 53, 6: 54, 7: 55, 8: 56, 9: 57, 0: 48,
+                    minus: 189, equal: 187, q: 81, w: 87, e: 69, r: 82, t: 84, y: 89, u: 85, i: 73,
+                    o: 79, p: 80, foreBrack: 219, backBrack: 221, backSlash: 220, a: 65, s: 83, d: 68,
+                    f: 70, g: 71, h: 72, j: 74, k: 75, l: 76, semicolon: 186, quote: 222, enter: 13,
+                    keyShift: 16, z: 90, x: 88, c: 67, v: 86, b: 66, n: 78, m: 77, comma: 188,
+                    period: 190, foreSlash: 191, space: 32, dirLeft: 37, dirUp: 38, dirRight: 39,
+                    dirDown: 40, ins: 45, del: 46, home: 36, end: 35, pageUp: 33, pageDown: 34,
+                    num0: 96, num1: 97, num2: 98, num3: 99, num4: 100, num5: 101, num6: 102, num7: 103,
+                    num8: 104, num9: 105, numPeriod: 110, numPlus: 107, numMinus: 109, numTimes: 106,
+                    numDivide: 111
+                };
+
+                const keyCode = keyCodeMap[internalKeyName];
+
+                if (eventId === 0) {
+                    // 禁用按键：从映射中移除
+                    if (Input.keyMapper[keyCode] === internalKeyName) {
+                        delete Input.keyMapper[keyCode];
+                    }
+                } else {
+                    // 启用按键：添加到映射
+                    Input.keyMapper[keyCode] = internalKeyName;
+                }
+
+                // 重新构建活动按键列表
+                MugenButtonEvents._setupOptimizations();
+
+                console.log(`MugenButtonEvents: 已设置按键 ${keyName} -> 公共事件 ${eventId}`);
+            };
+        }
+
+        // 向后兼容的方法
+        static updateKeyConfig(key, eventId) {
+            if (this._keyConfig.hasOwnProperty(key)) {
+                this._keyConfig[key] = eventId;
+                this._setupOptimizations();
+                return true;
+            }
+            return false;
+        }
+
+        static getKeyConfig(key) {
+            return this._keyConfig[key] || 0;
+        }
+
+        static getAllActiveKeys() {
+            return this._activeKeys.slice();
         }
     }
 
-    // 初始化插件
     MugenButtonEvents.init();
 }());
