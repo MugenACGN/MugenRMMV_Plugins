@@ -13,8 +13,6 @@
  * Mugen自定义按键绑定公共事件 v1.1.1
  * ============================================================================
  *
- * 修复存档间配置隔离问题，确保每个存档有独立的按键配置。
- *
  * 插件命令：
  *   MugenSetKeyConfig [json]    - 使用JSON设置按键配置
  *   MugenResetConfig           - 恢复为插件参数中的默认配置
@@ -245,8 +243,6 @@
                 const handlerName = commandMap[command];
                 if (handlerName && this[handlerName]) {
                     this[handlerName](args);
-                } else {
-                    console.warn(`MugenButtonEvents: 未知的插件命令: ${command}`);
                 }
             };
 
@@ -481,8 +477,6 @@
 
             // 重新应用配置
             this._applyConfig();
-
-            console.log('MugenButtonEvents: 已重置插件状态（返回主菜单）');
         }
 
         // 公共API
